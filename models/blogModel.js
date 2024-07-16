@@ -12,9 +12,12 @@ const blogSchema = new Schema({
   title: { type: String, required: true },
   content: { type: String, required: true },
   commentCount: { type: Number, default: 0 },
-  likeCount: {
-    type: Number,
-    default: 0,
+  likeCount: { type: Number, default: 0 },
+  likes: { type: [String], default: [] },
+  category:{
+    type:String,
+    required: true,
+    enum: ['Technology', 'Sports', 'Business', 'Health', 'Entertainment'],
   },
   hide:{
     type: Boolean,

@@ -6,7 +6,7 @@ const morgan = require("morgan");
 const dotenv = require("dotenv");
 const userRoutes = require("./routes/userRoutes");
 const blogRoutes = require("./routes/blogRoutes");
-
+const cookieParser = require("cookie-parser");
 
 
 dotenv.config();
@@ -17,6 +17,7 @@ const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 app.use(morgan("dev"));
+app.use(cookieParser());
 
 
 
