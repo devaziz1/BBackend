@@ -15,7 +15,10 @@ router.get("/search/:title", blogController.searchBlogsByTitle);
 router.get("/searchByCategory/:category", blogController.searchBlogsByCategory);
 router.get("/searchByCategoryForUser",blogController.searchBlogsByCategoryForUser);
 router.get("/getTotalCounts/:id", blogController.getTotalCounts);
-router.get("/userBlogsStats/:userId", blogController.getUserBlogStats);
+router.get("/DailyBlogsStats/:userId", blogController.getUserBlogStats);
+router.get("/MonthlyBlogsStats/:userId", blogController.getUserMonthlyStats);
+router.get("/YearlyBlogsStats/:userId", blogController.getUserYearlyStats);
+
 
 router.patch("/hideblog/:id", blogController.hideBlog);
 router.patch("/unHideblog/:id", blogController.unhideBlog);

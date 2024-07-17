@@ -1,13 +1,6 @@
 const Blog = require("../models/blogModel");
 const User = require("../models/userModel");
 const mongoose = require("mongoose");
-const moment = require("moment");
-
-const getMonthName = (month) =>
-  moment()
-    .month(month - 1)
-    .format("MMMM");
-const getDayName = (day) => moment().day(day).format("dddd");
 
 const createBlog = async (req, res) => {
   try {
@@ -424,23 +417,84 @@ const getBlogsByUser = async (req, res) => {
 };
 
 const getUserBlogStats = async (req, res) => {
+     const { userId } = req.params; // Assuming user ID is passed as a route parameter
+
+     try {
+       const stats = await Blog.aggregate([
+         // Match blogs by the given user ID
+         { $match: { user: new mongoose.Types.ObjectId(userId) } },
+         {
+           $project: {
+             dayOfWeek: { $dayOfWeek: "$createdAt" },
+             likeCount: 1,
+             comments: 1,
+           },
+         },
+         {
+           $bucket: {
+             groupBy: "$dayOfWeek",
+             boundaries: [1, 2, 3, 4, 5, 6, 7, 8], // 1 to 7 are the day numbers, 8 is the upper bound
+             default: "Other",
+             output: {
+               totalBlogs: { $sum: 1 },
+               totalLikes: { $sum: "$likeCount" },
+               totalComments: { $sum: { $size: "$comments" } },
+             },
+           },
+         },
+         {
+           $sort: { _id: 1 }, // Sort by day of the week (Sunday = 1, Monday = 2, ..., Saturday = 7)
+         },
+       ]);
+
+       const dayNames = [
+         "Sunday",
+         "Monday",
+         "Tuesday",
+         "Wednesday",
+         "Thursday",
+         "Friday",
+         "Saturday",
+       ];
+       const result = Array.from({ length: 7 }, (_, i) => {
+         const stat = stats.find((s) => s._id === i + 1);
+         return {
+           day: dayNames[i],
+           totalBlogs: stat ? stat.totalBlogs : 0,
+           totalLikes: stat ? stat.totalLikes : 0,
+           totalComments: stat ? stat.totalComments : 0,
+         };
+       });
+
+       res.status(200).json(result);
+     } catch (error) {
+       console.error("Error getting user daily stats:", error);
+       res.status(500).json({ error: "Internal Server Error" });
+     }
+};
+
+const getUserMonthlyStats = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const dailyStats = await Blog.aggregate([
+    const monthlyStats = await Blog.aggregate([
       {
         $match: {
           user: new mongoose.Types.ObjectId(userId),
           createdAt: {
-            $gte: new Date(new Date().setHours(0, 0, 0, 0)), // Start of today
-            $lt: new Date(new Date().setHours(24, 0, 0, 0)), // End of today
+            $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Start of the month
+            $lt: new Date(
+              new Date().getFullYear(),
+              new Date().getMonth() + 1,
+              1
+            ), // Start of next month
           },
         },
       },
       {
         $group: {
           _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+            $dateToString: { format: "%Y-%m", date: "$createdAt" },
           },
           totalBlogs: { $sum: 1 },
           totalLikes: { $sum: "$likeCount" },
@@ -452,7 +506,42 @@ const getUserBlogStats = async (req, res) => {
       },
     ]);
 
-    res.status(200).json(dailyStats);
+    res.status(200).json(monthlyStats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const getUserYearlyStats = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const yearlyStats = await Blog.aggregate([
+      {
+        $match: {
+          user: new mongoose.Types.ObjectId(userId),
+          createdAt: {
+            $gte: new Date(new Date().getFullYear(), 0, 1), // Start of the year
+            $lt: new Date(new Date().getFullYear() + 1, 0, 1), // Start of next year
+          },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y", date: "$createdAt" },
+          },
+          totalBlogs: { $sum: 1 },
+          totalLikes: { $sum: "$likeCount" },
+          totalComments: { $sum: "$commentCount" },
+        },
+      },
+      {
+        $sort: { _id: 1 },
+      },
+    ]);
+
+    res.status(200).json(yearlyStats);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -608,4 +697,6 @@ module.exports = {
   searchBlogsByCategory,
   getTotalCounts,
   getUserBlogStats,
+  getUserMonthlyStats,
+  getUserYearlyStats,
 };
