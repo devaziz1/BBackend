@@ -7,7 +7,7 @@ const createBlog = async (req, res) => {
     const { userId, title, content, category, username } = req.body;
 
     const user = await User.findById(userId);
-    console.log(user);
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -85,28 +85,10 @@ const getAllBlogs = async (req, res) => {
   }
 };
 
-// const getBlogsByUser = async (req, res) => {
-//   try {
-//     const blogs = await Blog.find({ user: req.params.id, hide: false })
-//       .populate("user", "name email")
-//       .populate("comments.user", "name email")
-//       .exec();
-
-//     if (!blogs.length) {
-//       return res.status(404).json({ message: "No blogs found for this user" });
-//     }
-//     console.log("All blogs fetched successfully");
-//     res.status(200).json(blogs);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
 const searchBlogsByTitle = async (req, res) => {
   try {
     const { title } = req.params;
-    console.log("title enter by user");
-    console.log(title);
+
 
     if (!title) {
       return res
@@ -269,8 +251,6 @@ const likeBlog = async (req, res) => {
   }
 };
 
-
-
 const UnlikeBlog = async (req, res) => {
   try {
     const blog = await Blog.findById(req.params.id);
@@ -394,11 +374,11 @@ const getBlogsByUser = async (req, res) => {
 };
 
 const getUserBlogStats = async (req, res) => {
-     const { userId } = req.params; // Assuming user ID is passed as a route parameter
+     const { userId } = req.params; 
 
      try {
        const stats = await Blog.aggregate([
-         // Match blogs by the given user ID
+      
          { $match: { user: new mongoose.Types.ObjectId(userId) } },
          {
            $project: {
@@ -410,7 +390,7 @@ const getUserBlogStats = async (req, res) => {
          {
            $bucket: {
              groupBy: "$dayOfWeek",
-             boundaries: [1, 2, 3, 4, 5, 6, 7, 8], // 1 to 7 are the day numbers, 8 is the upper bound
+             boundaries: [1, 2, 3, 4, 5, 6, 7, 8],
              default: "Other",
              output: {
                totalBlogs: { $sum: 1 },
@@ -420,7 +400,7 @@ const getUserBlogStats = async (req, res) => {
            },
          },
          {
-           $sort: { _id: 1 }, // Sort by day of the week (Sunday = 1, Monday = 2, ..., Saturday = 7)
+           $sort: { _id: 1 },
          },
        ]);
 
@@ -459,12 +439,12 @@ const getUserMonthlyStats = async (req, res) => {
         $match: {
           user: new mongoose.Types.ObjectId(userId),
           createdAt: {
-            $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), // Start of the month
+            $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), 
             $lt: new Date(
               new Date().getFullYear(),
               new Date().getMonth() + 1,
               1
-            ), // Start of next month
+            ), 
           },
         },
       },
@@ -498,8 +478,8 @@ const getUserYearlyStats = async (req, res) => {
         $match: {
           user: new mongoose.Types.ObjectId(userId),
           createdAt: {
-            $gte: new Date(new Date().getFullYear(), 0, 1), // Start of the year
-            $lt: new Date(new Date().getFullYear() + 1, 0, 1), // Start of next year
+            $gte: new Date(new Date().getFullYear(), 0, 1), 
+            $lt: new Date(new Date().getFullYear() + 1, 0, 1), 
           },
         },
       },
@@ -524,138 +504,7 @@ const getUserYearlyStats = async (req, res) => {
   }
 };
 
-// const getUserBlogStats = async (req, res) => {
-//   try {
-//     const userId = req.params.userId;
 
-//     const pipeline = [
-//       { $match: { user: userId } },
-//       {
-//         $facet: {
-//           daily: [
-//             {
-//               $group: {
-//                 _id: {
-//                   day: { $dayOfMonth: "$createdAt" },
-//                   month: { $month: "$createdAt" },
-//                   year: { $year: "$createdAt" },
-//                 },
-//                 blogCount: { $sum: 1 },
-//                 likeCount: { $sum: "$likeCount" },
-//                 commentCount: { $sum: "$commentCount" },
-//               },
-//             },
-//             {
-//               $sort: { "_id.year": -1, "_id.month": -1, "_id.day": -1 },
-//             },
-//             {
-//               $addFields: {
-//                 "date.dayName": {
-//                   $function: {
-//                     body: getDayName.toString(),
-//                     args: ["$_id.day"],
-//                     lang: "js",
-//                   },
-//                 },
-//                 "date.monthName": {
-//                   $function: {
-//                     body: getMonthName.toString(),
-//                     args: ["$_id.month"],
-//                     lang: "js",
-//                   },
-//                 },
-//               },
-//             },
-//             {
-//               $project: {
-//                 _id: 0,
-//                 date: {
-//                   day: "$_id.day",
-//                   month: "$_id.month",
-//                   year: "$_id.year",
-//                   dayName: "$date.dayName",
-//                   monthName: "$date.monthName",
-//                 },
-//                 blogCount: 1,
-//                 likeCount: 1,
-//                 commentCount: 1,
-//               },
-//             },
-//           ],
-//           monthly: [
-//             {
-//               $group: {
-//                 _id: {
-//                   month: { $month: "$createdAt" },
-//                   year: { $year: "$createdAt" },
-//                 },
-//                 blogCount: { $sum: 1 },
-//                 likeCount: { $sum: "$likeCount" },
-//                 commentCount: { $sum: "$commentCount" },
-//               },
-//             },
-//             {
-//               $sort: { "_id.year": -1, "_id.month": -1 },
-//             },
-//             {
-//               $addFields: {
-//                 "date.monthName": {
-//                   $function: {
-//                     body: getMonthName.toString(),
-//                     args: ["$_id.month"],
-//                     lang: "js",
-//                   },
-//                 },
-//               },
-//             },
-//             {
-//               $project: {
-//                 _id: 0,
-//                 date: {
-//                   month: "$_id.month",
-//                   year: "$_id.year",
-//                   monthName: "$date.monthName",
-//                 },
-//                 blogCount: 1,
-//                 likeCount: 1,
-//                 commentCount: 1,
-//               },
-//             },
-//           ],
-//           yearly: [
-//             {
-//               $group: {
-//                 _id: { year: { $year: "$createdAt" } },
-//                 blogCount: { $sum: 1 },
-//                 likeCount: { $sum: "$likeCount" },
-//                 commentCount: { $sum: "$commentCount" },
-//               },
-//             },
-//             {
-//               $sort: { "_id.year": -1 },
-//             },
-//             {
-//               $project: {
-//                 _id: 0,
-//                 year: "$_id.year",
-//                 blogCount: 1,
-//                 likeCount: 1,
-//                 commentCount: 1,
-//               },
-//             },
-//           ],
-//         },
-//       },
-//     ];
-
-//     const stats = await Blog.aggregate(pipeline);
-
-//     res.status(200).json(stats);
-//   } catch (error) {
-//     console.error("Error fetching user blog stats:", error);
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
 
 module.exports = {
   createBlog,
