@@ -258,26 +258,6 @@ const likeBlog = async (req, res) => {
     if (!blog) {
       return res.status(404).json({ message: "Blog not found" });
     }
-
-    let userIdentifier = req.cookies.userIdentifier;
-
-    if (!userIdentifier) {
-      userIdentifier = generateUniqueIdentifier();
-      res.cookie("userIdentifier", userIdentifier, {
-        maxAge: 900000, // 15 minutes
-        httpOnly: true,
-      });
-    }
-
-    // Check if the user has already liked this blog
-    if (blog.likes.includes(userIdentifier)) {
-      return res
-        .status(400)
-        .json({ message: "You have already liked this blog." });
-    }
-
-    // Add the user identifier to the likes array
-    blog.likes.push(userIdentifier);
     blog.likeCount++;
     await blog.save();
 
@@ -289,10 +269,7 @@ const likeBlog = async (req, res) => {
   }
 };
 
-function generateUniqueIdentifier() {
-  // Generate a unique identifier (e.g., using a random value or timestamp)
-  return "unique-identifier-" + Date.now();
-}
+
 
 const UnlikeBlog = async (req, res) => {
   try {
