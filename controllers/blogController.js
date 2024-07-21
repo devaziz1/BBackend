@@ -1,15 +1,45 @@
 const Blog = require("../models/blogModel");
 const User = require("../models/userModel");
 const mongoose = require("mongoose");
+const fs = require("fs");
+const path = require("path");
+
+const uploadFile = async (file, uploadPath) => {
+  const { createReadStream, filename, mimetype, encoding } = await file;
+  const stream = createReadStream();
+  const filePath = path.join(uploadPath, filename);
+
+  return new Promise((resolve, reject) => {
+    stream
+      .on("error", (error) => {
+        if (stream.truncated)
+          // Delete the truncated file
+          fs.unlinkSync(filePath);
+        reject(error);
+      })
+      .pipe(fs.createWriteStream(filePath))
+      .on("error", (error) => reject(error))
+      .on("finish", () => resolve({ filePath, mimetype, encoding }));
+  });
+};
 
 const createBlog = async (req, res) => {
   try {
     const { userId, title, content, category, username } = req.body;
+    console.log("Request body");
+    console.log(req.body);
+
+    const file = req.file;
 
     const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
+    }
+
+    let filePath = "";
+    if (file) {
+      filePath = path.join("/uploads", file.filename); // Relative path for serving the file
     }
 
     const newBlog = new Blog({
@@ -18,6 +48,7 @@ const createBlog = async (req, res) => {
       title,
       content,
       category,
+      image: filePath,
     });
 
     await newBlog.save();
@@ -79,16 +110,23 @@ const getAllBlogs = async (req, res) => {
       .populate("comments.user", "name email")
       .exec();
 
-    res.status(200).json(blogs);
+    const blogsWithImageUrls = blogs.map((blog) => ({
+      ...blog._doc, // Spread the existing blog document
+      image: blog.image
+        ? `${req.protocol}://${req.get("host")}${blog.image}`
+        : null, // Append the base URL to the image path
+    }));
+
+    res.status(200).json(blogsWithImageUrls);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
+
 const searchBlogsByTitle = async (req, res) => {
   try {
     const { title } = req.params;
-
 
     if (!title) {
       return res
@@ -374,60 +412,59 @@ const getBlogsByUser = async (req, res) => {
 };
 
 const getUserBlogStats = async (req, res) => {
-     const { userId } = req.params; 
+  const { userId } = req.params;
 
-     try {
-       const stats = await Blog.aggregate([
-      
-         { $match: { user: new mongoose.Types.ObjectId(userId) } },
-         {
-           $project: {
-             dayOfWeek: { $dayOfWeek: "$createdAt" },
-             likeCount: 1,
-             comments: 1,
-           },
-         },
-         {
-           $bucket: {
-             groupBy: "$dayOfWeek",
-             boundaries: [1, 2, 3, 4, 5, 6, 7, 8],
-             default: "Other",
-             output: {
-               totalBlogs: { $sum: 1 },
-               totalLikes: { $sum: "$likeCount" },
-               totalComments: { $sum: { $size: "$comments" } },
-             },
-           },
-         },
-         {
-           $sort: { _id: 1 },
-         },
-       ]);
+  try {
+    const stats = await Blog.aggregate([
+      { $match: { user: new mongoose.Types.ObjectId(userId) } },
+      {
+        $project: {
+          dayOfWeek: { $dayOfWeek: "$createdAt" },
+          likeCount: 1,
+          comments: 1,
+        },
+      },
+      {
+        $bucket: {
+          groupBy: "$dayOfWeek",
+          boundaries: [1, 2, 3, 4, 5, 6, 7, 8],
+          default: "Other",
+          output: {
+            totalBlogs: { $sum: 1 },
+            totalLikes: { $sum: "$likeCount" },
+            totalComments: { $sum: { $size: "$comments" } },
+          },
+        },
+      },
+      {
+        $sort: { _id: 1 },
+      },
+    ]);
 
-       const dayNames = [
-         "Sunday",
-         "Monday",
-         "Tuesday",
-         "Wednesday",
-         "Thursday",
-         "Friday",
-         "Saturday",
-       ];
-       const result = Array.from({ length: 7 }, (_, i) => {
-         const stat = stats.find((s) => s._id === i + 1);
-         return {
-           day: dayNames[i],
-           totalBlogs: stat ? stat.totalBlogs : 0,
-           totalLikes: stat ? stat.totalLikes : 0,
-           totalComments: stat ? stat.totalComments : 0,
-         };
-       });
+    const dayNames = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ];
+    const result = Array.from({ length: 7 }, (_, i) => {
+      const stat = stats.find((s) => s._id === i + 1);
+      return {
+        day: dayNames[i],
+        totalBlogs: stat ? stat.totalBlogs : 0,
+        totalLikes: stat ? stat.totalLikes : 0,
+        totalComments: stat ? stat.totalComments : 0,
+      };
+    });
 
-       res.status(200).json(result);
-     } catch (error) {
-       console.error("Error getting user daily stats:", error);
-       res.status(500).json({ error: "Internal Server Error" });
-     }
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error getting user daily stats:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 };
 
 const getUserMonthlyStats = async (req, res) => {
@@ -439,12 +476,12 @@ const getUserMonthlyStats = async (req, res) => {
         $match: {
           user: new mongoose.Types.ObjectId(userId),
           createdAt: {
-            $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1), 
+            $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
             $lt: new Date(
               new Date().getFullYear(),
               new Date().getMonth() + 1,
               1
-            ), 
+            ),
           },
         },
       },
@@ -478,8 +515,8 @@ const getUserYearlyStats = async (req, res) => {
         $match: {
           user: new mongoose.Types.ObjectId(userId),
           createdAt: {
-            $gte: new Date(new Date().getFullYear(), 0, 1), 
-            $lt: new Date(new Date().getFullYear() + 1, 0, 1), 
+            $gte: new Date(new Date().getFullYear(), 0, 1),
+            $lt: new Date(new Date().getFullYear() + 1, 0, 1),
           },
         },
       },
@@ -504,10 +541,42 @@ const getUserYearlyStats = async (req, res) => {
   }
 };
 
+const getBlogById = async (req, res) => {
+  const id = req.params.id;
+  console.log(id);
+
+  try {
+    const blog = await Blog.findById(id)
+      .populate("user", "name email") // Include only necessary fields
+      .populate("comments.user", "name email");
+
+    if (!blog) {
+      return res.status(404).json({ message: "Blog not found" });
+    }
+
+    // Format the image URL
+    const blogWithImageUrl = {
+      ...blog._doc, // Spread the existing blog document
+      image: blog.image
+        ? `${req.protocol}://${req.get("host")}${blog.image.replace(
+            /\\/g,
+            "/"
+          )}`
+        : null,
+    };
+
+    res.status(200).json(blogWithImageUrl);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error fetching blog", error: error.message });
+  }
+};
 
 
 module.exports = {
   createBlog,
+  getBlogById,
   deleteBlog,
   updateBlog,
   getAllBlogs,
